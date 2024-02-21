@@ -39,25 +39,25 @@ unsigned int HashDjb2(std::string str) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
 
     // Get Kernel32
-	PPEB pPEB = (PPEB) __readgsqword(0x60);
-	PPEB_LDR_DATA pLoaderData = pPEB->Ldr;
-	PLIST_ENTRY listHead = &pLoaderData->InMemoryOrderModuleList;
-	PLIST_ENTRY listCurrent = listHead->Flink;
-	PVOID kernel32Address;
-	do {
-		PLDR_DATA_TABLE_ENTRY dllEntry = CONTAINING_RECORD(listCurrent, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
-		DWORD dllNameLength = WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, NULL, 0, NULL, NULL);
-		PCHAR dllName = (PCHAR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dllNameLength);
-		WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, dllName, dllNameLength, NULL, NULL);
-		CharUpperA(dllName);
-		if (strstr(dllName, SKCR("KERNEL32.DLL"))) {
-			kernel32Address = dllEntry->DllBase;
-			HeapFree(GetProcessHeap(), 0, dllName);
-			break;
-		}
-		HeapFree(GetProcessHeap(), 0, dllName);
-		listCurrent = listCurrent->Flink;
-	} while (listCurrent != listHead);
+    PPEB pPEB = (PPEB) __readgsqword(0x60);
+    PPEB_LDR_DATA pLoaderData = pPEB->Ldr;
+    PLIST_ENTRY listHead = &pLoaderData->InMemoryOrderModuleList;
+    PLIST_ENTRY listCurrent = listHead->Flink;
+    PVOID kernel32Address;
+    do {
+        PLDR_DATA_TABLE_ENTRY dllEntry = CONTAINING_RECORD(listCurrent, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+        DWORD dllNameLength = WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, NULL, 0, NULL, NULL);
+        PCHAR dllName = (PCHAR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dllNameLength);
+        WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, dllName, dllNameLength, NULL, NULL);
+        CharUpperA(dllName);
+        if (strstr(dllName, SKCR("KERNEL32.DLL"))) {
+            kernel32Address = dllEntry->DllBase;
+            HeapFree(GetProcessHeap(), 0, dllName);
+            break;
+        }
+        HeapFree(GetProcessHeap(), 0, dllName);
+        listCurrent = listCurrent->Flink;
+    } while (listCurrent != listHead);
 
     // API hashing
     PFindResource fFindResource;
