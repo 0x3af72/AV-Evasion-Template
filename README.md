@@ -6,11 +6,11 @@ Disclaimer: This is just a proof-of-concept. It is for educational purposes only
 
 ## Shellcode injection
 
-To be done
+is shellcode injection necessary at this stage?
 
 ## API hashing
 
-To be done
+API hashing using modified djb2 hash function to hide WINAPI functions.
 
 ## String encryption
 
