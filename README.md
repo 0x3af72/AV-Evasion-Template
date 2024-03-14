@@ -4,7 +4,7 @@ AV Evasion techniques to be used in ESAP
 
 Disclaimer: This is just a proof-of-concept. It is for educational purposes only.
 
-**NOTE**: This version is outdated now. Refer to [ESAP](https://0x3af72.pythonanywhere.com/ESAP)'s source code for an improved version.
+**NOTE**: This version is outdated now. Refer to [ESAP](https://github.com/0x3af72/ESAP)'s source code for an improved version.
 
 ## Shellcode injection
 
